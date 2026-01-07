@@ -1,0 +1,266 @@
+use super::image::{Image, Pixel};
+
+#[derive(Debug)]
+pub enum TransformError {
+    OutOfBounds,
+}
+
+impl std::fmt::Display for TransformError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TransformError::OutOfBounds => write!(f, "Region is out of bounds"),
+        }
+    }
+}
+
+impl std::error::Error for TransformError {}
+
+pub trait Transformation {
+    fn apply(&self, image: &Image) -> Result<Image, TransformError>;
+}
+
+// Geometric transformations
+
+pub struct Crop {
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+}
+
+impl Crop {
+    pub fn new(x: usize, y: usize, width: usize, height: usize) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+}
+
+impl Transformation for Crop {
+    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+        if self.x + self.width > image.width || self.y + self.height > image.height {
+            return Err(TransformError::OutOfBounds);
+        }
+
+        let mut pixels = Vec::with_capacity(self.width * self.height);
+
+        for dy in 0..self.height {
+            for dx in 0..self.width {
+                let src_idx = (self.y + dy) * image.width + (self.x + dx);
+                pixels.push(image.pixels[src_idx]);
+            }
+        }
+
+        Ok(Image {
+            width: self.width,
+            height: self.height,
+            pixels,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum FlipAxis {
+    Horizontal,
+    Vertical,
+}
+
+pub struct Flip {
+    axis: FlipAxis,
+}
+
+impl Flip {
+    pub fn new(axis: FlipAxis) -> Self {
+        Self { axis }
+    }
+}
+
+impl Transformation for Flip {
+    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+        let mut pixels = vec![Pixel::new(0, 0, 0); image.width * image.height];
+
+        match self.axis {
+            FlipAxis::Horizontal => {
+                for y in 0..image.height {
+                    for x in 0..image.width {
+                        let src_idx = y * image.width + x;
+                        let dst_x = image.width - 1 - x;
+                        let dst_idx = y * image.width + dst_x;
+                        pixels[dst_idx] = image.pixels[src_idx];
+                    }
+                }
+            }
+            FlipAxis::Vertical => {
+                for y in 0..image.height {
+                    for x in 0..image.width {
+                        let src_idx = y * image.width + x;
+                        let dst_y = image.height - 1 - y;
+                        let dst_idx = dst_y * image.width + x;
+                        pixels[dst_idx] = image.pixels[src_idx];
+                    }
+                }
+            }
+        }
+
+        Ok(Image {
+            width: image.width,
+            height: image.height,
+            pixels,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum RotateAngle {
+    Deg90,
+    Deg180,
+    Deg270,
+}
+
+pub struct Rotate {
+    angle: RotateAngle,
+}
+
+impl Rotate {
+    pub fn new(angle: RotateAngle) -> Self {
+        Self { angle }
+    }
+}
+
+impl Transformation for Rotate {
+    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+        let (width, height) = match self.angle {
+            RotateAngle::Deg90 | RotateAngle::Deg270 => (image.height, image.width),
+            RotateAngle::Deg180 => (image.width, image.height),
+        };
+
+        let mut pixels = vec![Pixel::new(0, 0, 0); width * height];
+
+        match self.angle {
+            RotateAngle::Deg90 => {
+                for y in 0..image.height {
+                    for x in 0..image.width {
+                        let src_idx = y * image.width + x;
+                        let dst_x = image.height - 1 - y;
+                        let dst_y = x;
+                        let dst_idx = dst_y * image.height + dst_x;
+                        pixels[dst_idx] = image.pixels[src_idx];
+                    }
+                }
+            }
+            RotateAngle::Deg180 => {
+                for y in 0..image.height {
+                    for x in 0..image.width {
+                        let src_idx = y * image.width + x;
+                        let dst_x = image.width - 1 - x;
+                        let dst_y = image.height - 1 - y;
+                        let dst_idx = dst_y * image.width + dst_x;
+                        pixels[dst_idx] = image.pixels[src_idx];
+                    }
+                }
+            }
+            RotateAngle::Deg270 => {
+                for y in 0..image.height {
+                    for x in 0..image.width {
+                        let src_idx = y * image.width + x;
+                        let dst_x = y;
+                        let dst_y = image.width - 1 - x;
+                        let dst_idx = dst_y * image.height + dst_x;
+                        pixels[dst_idx] = image.pixels[src_idx];
+                    }
+                }
+            }
+        }
+
+        Ok(Image {
+            width,
+            height,
+            pixels,
+        })
+    }
+}
+
+pub struct Fit {
+    max_width: usize,
+    max_height: usize,
+}
+
+impl Fit {
+    pub fn new(max_width: usize, max_height: usize) -> Self {
+        Self {
+            max_width,
+            max_height,
+        }
+    }
+}
+
+impl Transformation for Fit {
+    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+        let scale_x = self.max_width as f32 / image.width as f32;
+        let scale_y = self.max_height as f32 / image.height as f32;
+        let scale = scale_x.min(scale_y).min(1.0);
+
+        let new_width = (image.width as f32 * scale) as usize;
+        let new_height = (image.height as f32 * scale) as usize;
+
+        if new_width == image.width && new_height == image.height {
+            return Ok(Image {
+                width: image.width,
+                height: image.height,
+                pixels: image.pixels.clone(),
+            });
+        }
+
+        let mut pixels = vec![Pixel::new(0, 0, 0); new_width * new_height];
+
+        let x_ratio = image.width as f32 / new_width as f32;
+        let y_ratio = image.height as f32 / new_height as f32;
+
+        for dst_y in 0..new_height {
+            for dst_x in 0..new_width {
+                let src_x = (dst_x as f32 * x_ratio) as usize;
+                let src_y = (dst_y as f32 * y_ratio) as usize;
+
+                let src_idx = src_y * image.width + src_x;
+                let dst_idx = dst_y * new_width + dst_x;
+
+                pixels[dst_idx] = image.pixels[src_idx];
+            }
+        }
+
+        Ok(Image {
+            width: new_width,
+            height: new_height,
+            pixels,
+        })
+    }
+}
+
+// Pixel-to-pixel transformations
+
+pub struct Invert;
+
+impl Invert {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Transformation for Invert {
+    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+        let pixels: Vec<Pixel> = image
+            .pixels
+            .iter()
+            .map(|p| Pixel::new(255 - p.r, 255 - p.g, 255 - p.b))
+            .collect();
+
+        Ok(Image {
+            width: image.width,
+            height: image.height,
+            pixels,
+        })
+    }
+}
