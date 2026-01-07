@@ -206,14 +206,6 @@ impl Transformation for Fit {
         let new_width = (image.width as f32 * scale) as usize;
         let new_height = (image.height as f32 * scale) as usize;
 
-        if new_width == image.width && new_height == image.height {
-            return Ok(Image {
-                width: image.width,
-                height: image.height,
-                pixels: image.pixels.clone(),
-            });
-        }
-
         let mut pixels = vec![Pixel::new(0, 0, 0); new_width * new_height];
 
         let x_ratio = image.width as f32 / new_width as f32;
@@ -264,3 +256,167 @@ impl Transformation for Invert {
         })
     }
 }
+
+pub struct Grayscale;
+
+impl Grayscale {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Transformation for Grayscale {
+    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+        let pixels: Vec<Pixel> = image
+            .pixels
+            .iter()
+            .map(|p| {
+                let gray = ((p.r as u16 + p.g as u16 + p.b as u16) / 3) as u8;
+                Pixel::new(gray, gray, gray)
+            })
+            .collect();
+
+        Ok(Image {
+            width: image.width,
+            height: image.height,
+            pixels,
+        })
+    }
+}
+
+pub struct Brightness {
+    factor: f32,
+}
+
+impl Brightness {
+    pub fn new(factor: f32) -> Self {
+        Self { factor }
+    }
+}
+
+impl Transformation for Brightness {
+    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+        let pixels: Vec<Pixel> = image
+            .pixels
+            .iter()
+            .map(|p| {
+                Pixel::from_f32(
+                    p.r as f32 * self.factor,
+                    p.g as f32 * self.factor,
+                    p.b as f32 * self.factor,
+                )
+            })
+            .collect();
+
+        Ok(Image {
+            width: image.width,
+            height: image.height,
+            pixels,
+        })
+    }
+}
+
+pub struct Contrast {
+    factor: f32,
+}
+
+impl Contrast {
+    pub fn new(factor: f32) -> Self {
+        Self { factor }
+    }
+}
+
+impl Transformation for Contrast {
+    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+        let pixels: Vec<Pixel> = image
+            .pixels
+            .iter()
+            .map(|p| {
+                Pixel::from_f32(
+                    (p.r as f32 - 128.0) * self.factor + 128.0,
+                    (p.g as f32 - 128.0) * self.factor + 128.0,
+                    (p.b as f32 - 128.0) * self.factor + 128.0,
+                )
+            })
+            .collect();
+
+        Ok(Image {
+            width: image.width,
+            height: image.height,
+            pixels,
+        })
+    }
+}
+
+pub struct Tint {
+    color: Pixel,
+    intensity: f32,
+}
+
+impl Tint {
+    pub fn new(color: Pixel, intensity: f32) -> Self {
+        Self { color, intensity }
+    }
+}
+
+impl Transformation for Tint {
+    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+        let blend = |src: u8, tint: u8| {
+            src as f32 * (1.0 - self.intensity) + tint as f32 * self.intensity
+        };
+
+        let pixels: Vec<Pixel> = image
+            .pixels
+            .iter()
+            .map(|p| {
+                Pixel::from_f32(
+                    blend(p.r, self.color.r),
+                    blend(p.g, self.color.g),
+                    blend(p.b, self.color.b),
+                )
+            })
+            .collect();
+
+        Ok(Image {
+            width: image.width,
+            height: image.height,
+            pixels,
+        })
+    }
+}
+
+pub struct Colorize {
+    color: Pixel,
+}
+
+impl Colorize {
+    pub fn new(color: Pixel) -> Self {
+        Self { color }
+    }
+}
+
+impl Transformation for Colorize {
+    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+        let pixels: Vec<Pixel> = image
+            .pixels
+            .iter()
+            .map(|p| {
+                let gray = (p.r as u16 + p.g as u16 + p.b as u16) / 3;
+                let factor = gray as f32 / 255.0;
+                Pixel::from_f32(
+                    self.color.r as f32 * factor,
+                    self.color.g as f32 * factor,
+                    self.color.b as f32 * factor,
+                )
+            })
+            .collect();
+
+        Ok(Image {
+            width: image.width,
+            height: image.height,
+            pixels,
+        })
+    }
+}
+
+// TODO: kernel: blur, sharpen, edge, emboss

@@ -10,6 +10,14 @@ impl Pixel {
         Self { r, g, b }
     }
 
+    pub fn from_f32(r: f32, g: f32, b: f32) -> Self {
+        Self {
+            r: r.clamp(0.0, 255.0) as u8,
+            g: g.clamp(0.0, 255.0) as u8,
+            b: b.clamp(0.0, 255.0) as u8,
+        }
+    }
+
     pub fn from_hex(hex: u32) -> Self {
         Self {
             r: ((hex >> 16) & 0xFF) as u8,
@@ -17,13 +25,8 @@ impl Pixel {
             b: (hex & 0xFF) as u8,
         }
     }
-
-    pub fn to_int(&self) -> u32 {
-        ((self.r as u32) << 16) | ((self.g as u32) << 8) | (self.b as u32)
-    }
 }
 
-#[derive(Clone)]
 pub struct Image {
     pub(crate) width: usize,
     pub(crate) height: usize,

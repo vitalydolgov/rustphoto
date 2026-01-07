@@ -3,7 +3,7 @@ mod rustphoto;
 use std::io::{self, Write};
 use std::ops::ControlFlow;
 
-use rustphoto::image::Image;
+use rustphoto::image::{Image, Pixel};
 use rustphoto::transforms::*;
 
 fn expand_path(path: &str) -> String {
@@ -21,6 +21,21 @@ fn parse_number(s: &str) -> Option<usize> {
         println!("Invalid number");
         None
     })
+}
+
+fn parse_float(s: &str) -> Option<f32> {
+    s.parse().ok().or_else(|| {
+        println!("Invalid number");
+        None
+    })
+}
+
+fn parse_hex_color(s: &str) -> Option<u32> {
+    if s.starts_with("#") {
+        u32::from_str_radix(&s[1..], 16).ok()
+    } else {
+        u32::from_str_radix(s, 16).ok()
+    }
 }
 
 fn cmd_load(parts: &[&str]) -> Option<Image> {
@@ -164,15 +179,99 @@ fn cmd_invert(image: &Image) -> Option<Image> {
     }
 }
 
+fn cmd_grayscale(image: &Image) -> Option<Image> {
+    let transform = Grayscale::new();
+
+    match transform.apply(image) {
+        Ok(result) => Some(result),
+        Err(e) => {
+            println!("Error: {}", e);
+            None
+        }
+    }
+}
+
+fn cmd_brightness(parts: &[&str], image: &Image) -> Option<Image> {
+    if parts.len() < 2 {
+        println!("Usage: brightness <factor>");
+        return None;
+    }
+
+    let factor = parse_float(parts[1])?;
+    let transform = Brightness::new(factor);
+
+    match transform.apply(image) {
+        Ok(result) => Some(result),
+        Err(e) => {
+            println!("Error: {}", e);
+            None
+        }
+    }
+}
+
+fn cmd_contrast(parts: &[&str], image: &Image) -> Option<Image> {
+    if parts.len() < 2 {
+        println!("Usage: contrast <factor>");
+        return None;
+    }
+
+    let factor = parse_float(parts[1])?;
+    let transform = Contrast::new(factor);
+
+    match transform.apply(image) {
+        Ok(result) => Some(result),
+        Err(e) => {
+            println!("Error: {}", e);
+            None
+        }
+    }
+}
+
+fn cmd_tint(parts: &[&str], image: &Image) -> Option<Image> {
+    if parts.len() < 3 {
+        println!("Usage: tint <hex_color> <intensity>");
+        return None;
+    }
+
+    let hex_color = parse_hex_color(parts[1])?;
+    let intensity = parse_float(parts[2])?;
+
+    let color = Pixel::from_hex(hex_color);
+    let transform = Tint::new(color, intensity);
+
+    match transform.apply(image) {
+        Ok(result) => Some(result),
+        Err(e) => {
+            println!("Error: {}", e);
+            None
+        }
+    }
+}
+
+fn cmd_colorize(parts: &[&str], image: &Image) -> Option<Image> {
+    if parts.len() < 2 {
+        println!("Usage: colorize <hex_color>");
+        return None;
+    }
+
+    let hex_color = parse_hex_color(parts[1])?;
+    let color = Pixel::from_hex(hex_color);
+    let transform = Colorize::new(color);
+
+    match transform.apply(image) {
+        Ok(result) => Some(result),
+        Err(e) => {
+            println!("Error: {}", e);
+            None
+        }
+    }
+}
+
 fn parse_command(
     command: &str,
     current_image: &mut Option<Image>,
     previous_image: &mut Option<Image>,
 ) -> ControlFlow<()> {
-    if command == "exit" {
-        return ControlFlow::Break(());
-    }
-
     let parts: Vec<&str> = command.split_whitespace().collect();
 
     if parts.is_empty() {
@@ -180,6 +279,9 @@ fn parse_command(
     }
 
     match parts[0] {
+        "exit" => {
+            return ControlFlow::Break(());
+        }
         "load" => {
             if let Some(img) = cmd_load(&parts) {
                 *current_image = Some(img);
@@ -188,14 +290,11 @@ fn parse_command(
 
             return ControlFlow::Continue(());
         }
-        "undo" => {
-            if previous_image.is_some() {
-                std::mem::swap(current_image, previous_image);
-                *previous_image = None;
-            } else {
-                println!("Nothing to undo");
-            }
-
+        "help" => {
+            println!(concat!(
+                "Available commands: load, save, crop, flip, rotate, fit, ",
+                "invert, grayscale, brightness, contrast, tint, colorize, undo, help, exit"
+            ));
             return ControlFlow::Continue(());
         }
         _ => {}
@@ -208,33 +307,70 @@ fn parse_command(
 
     match parts[0] {
         "save" => cmd_save(&parts, image),
+        "undo" => {
+            if let Some(prev) = previous_image.take() {
+                *current_image = Some(prev);
+            } else {
+                println!("Nothing to undo");
+            }
+        }
         "crop" => {
             if let Some(result) = cmd_crop(&parts, image) {
-                *previous_image = current_image.clone();
+                *previous_image = current_image.take();
                 *current_image = Some(result);
             }
         }
         "flip" => {
             if let Some(result) = cmd_flip(&parts, image) {
-                *previous_image = current_image.clone();
+                *previous_image = current_image.take();
                 *current_image = Some(result);
             }
         }
         "rotate" => {
             if let Some(result) = cmd_rotate(&parts, image) {
-                *previous_image = current_image.clone();
+                *previous_image = current_image.take();
                 *current_image = Some(result);
             }
         }
         "fit" => {
             if let Some(result) = cmd_fit(&parts, image) {
-                *previous_image = current_image.clone();
+                *previous_image = current_image.take();
                 *current_image = Some(result);
             }
         }
         "invert" => {
             if let Some(result) = cmd_invert(image) {
-                *previous_image = current_image.clone();
+                *previous_image = current_image.take();
+                *current_image = Some(result);
+            }
+        }
+        "grayscale" => {
+            if let Some(result) = cmd_grayscale(image) {
+                *previous_image = current_image.take();
+                *current_image = Some(result);
+            }
+        }
+        "brightness" => {
+            if let Some(result) = cmd_brightness(&parts, image) {
+                *previous_image = current_image.take();
+                *current_image = Some(result);
+            }
+        }
+        "contrast" => {
+            if let Some(result) = cmd_contrast(&parts, image) {
+                *previous_image = current_image.take();
+                *current_image = Some(result);
+            }
+        }
+        "tint" => {
+            if let Some(result) = cmd_tint(&parts, image) {
+                *previous_image = current_image.take();
+                *current_image = Some(result);
+            }
+        }
+        "colorize" => {
+            if let Some(result) = cmd_colorize(&parts, image) {
+                *previous_image = current_image.take();
                 *current_image = Some(result);
             }
         }
