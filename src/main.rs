@@ -1,6 +1,6 @@
 mod rustphoto;
 
-use std::io::{stdin, stdout, Write};
+use std::io::{Write, stdin, stdout};
 use std::ops::ControlFlow;
 
 use rustphoto::image::{Image, Pixel};
@@ -235,8 +235,8 @@ fn cmd_colorize(parts: &[&str], image: &Image) -> Option<Image> {
     }
 }
 
-fn cmd_boxblur(image: &Image) -> Option<Image> {
-    let transform = BoxBlur::new();
+fn cmd_blur(image: &Image) -> Option<Image> {
+    let transform = GaussianBlur::new();
 
     match transform.apply(image) {
         Ok(result) => Some(result),
@@ -247,8 +247,32 @@ fn cmd_boxblur(image: &Image) -> Option<Image> {
     }
 }
 
-fn cmd_blur(image: &Image) -> Option<Image> {
-    let transform = GaussianBlur::new();
+fn cmd_sharpen(image: &Image) -> Option<Image> {
+    let transform = Sharpen::new();
+
+    match transform.apply(image) {
+        Ok(result) => Some(result),
+        Err(e) => {
+            println!("Error: {}", e);
+            None
+        }
+    }
+}
+
+fn cmd_edge(image: &Image) -> Option<Image> {
+    let transform = EdgeDetect::new();
+
+    match transform.apply(image) {
+        Ok(result) => Some(result),
+        Err(e) => {
+            println!("Error: {}", e);
+            None
+        }
+    }
+}
+
+fn cmd_emboss(image: &Image) -> Option<Image> {
+    let transform = Emboss::new();
 
     match transform.apply(image) {
         Ok(result) => Some(result),
@@ -286,7 +310,7 @@ fn parse_command(
             println!(concat!(
                 "Available commands: load, save, crop, flip, rotate, fit, ",
                 "invert, grayscale, brightness, contrast, tint, colorize, ",
-                "blur, boxblur, undo, help, exit"
+                "blur, sharpen, edge, emboss, undo, help, exit"
             ));
             return ControlFlow::Continue(());
         }
@@ -373,8 +397,20 @@ fn parse_command(
                 *current_image = Some(result);
             }
         }
-        "boxblur" => {
-            if let Some(result) = cmd_boxblur(image) {
+        "sharpen" => {
+            if let Some(result) = cmd_sharpen(image) {
+                *previous_image = current_image.take();
+                *current_image = Some(result);
+            }
+        }
+        "edge" => {
+            if let Some(result) = cmd_edge(image) {
+                *previous_image = current_image.take();
+                *current_image = Some(result);
+            }
+        }
+        "emboss" => {
+            if let Some(result) = cmd_emboss(image) {
                 *previous_image = current_image.take();
                 *current_image = Some(result);
             }

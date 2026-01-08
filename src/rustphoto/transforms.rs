@@ -441,6 +441,35 @@ impl Transformation for Colorize {
 
 // Kernel filters
 
+trait KernelTransformation {
+    fn kernel(&self) -> &Kernel;
+}
+
+impl<T: KernelTransformation> Transformation for T {
+    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+        let kernel = self.kernel();
+        let mut pixels = vec![Pixel::new(0, 0, 0); (image.width * image.height) as usize];
+
+        for y in 0..image.height {
+            for x in 0..image.width {
+                let window = KernelWindow {
+                    image,
+                    center_x: x,
+                    center_y: y,
+                };
+                let idx = (y * image.width + x) as usize;
+                pixels[idx] = window.apply_kernel(&kernel);
+            }
+        }
+
+        Ok(Image {
+            width: image.width,
+            height: image.height,
+            pixels,
+        })
+    }
+}
+
 struct Kernel {
     size: i32,
     values: Vec<f32>,
@@ -512,80 +541,86 @@ impl<'a> KernelWindow<'a> {
     }
 }
 
-// TODO: kernel: sharpen, edge, emboss
-
-pub struct BoxBlur;
-
-impl BoxBlur {
-    pub fn new() -> Self {
-        Self
-    }
+pub struct GaussianBlur {
+    kernel: Kernel,
 }
-
-impl Transformation for BoxBlur {
-    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
-        // 3x3 box blur kernel:
-        // 1  1  1
-        // 1  1  1
-        // 1  1  1
-        let kernel = Kernel::new(3, vec![1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]).normalized();
-
-        let mut pixels = vec![Pixel::new(0, 0, 0); (image.width * image.height) as usize];
-
-        for y in 0..image.height {
-            for x in 0..image.width {
-                let window = KernelWindow {
-                    image,
-                    center_x: x,
-                    center_y: y,
-                };
-                let idx = (y * image.width + x) as usize;
-                pixels[idx] = window.apply_kernel(&kernel);
-            }
-        }
-
-        Ok(Image {
-            width: image.width,
-            height: image.height,
-            pixels,
-        })
-    }
-}
-
-pub struct GaussianBlur;
 
 impl GaussianBlur {
     pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Transformation for GaussianBlur {
-    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
         // 3x3 Gaussian kernel:
         // 1  2  1
         // 2  4  2
         // 1  2  1
         let kernel = Kernel::new(3, vec![1.0, 2.0, 1.0, 2.0, 4.0, 2.0, 1.0, 2.0, 1.0]).normalized();
+        Self { kernel }
+    }
+}
 
-        let mut pixels = vec![Pixel::new(0, 0, 0); (image.width * image.height) as usize];
+impl KernelTransformation for GaussianBlur {
+    fn kernel(&self) -> &Kernel {
+        &self.kernel
+    }
+}
 
-        for y in 0..image.height {
-            for x in 0..image.width {
-                let window = KernelWindow {
-                    image,
-                    center_x: x,
-                    center_y: y,
-                };
-                let idx = (y * image.width + x) as usize;
-                pixels[idx] = window.apply_kernel(&kernel);
-            }
-        }
+pub struct Sharpen {
+    kernel: Kernel,
+}
 
-        Ok(Image {
-            width: image.width,
-            height: image.height,
-            pixels,
-        })
+impl Sharpen {
+    pub fn new() -> Self {
+        // 3x3 sharpen kernel:
+        //  0 -1  0
+        // -1  5 -1
+        //  0 -1  0
+        let kernel = Kernel::new(3, vec![0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0]);
+        Self { kernel }
+    }
+}
+
+impl KernelTransformation for Sharpen {
+    fn kernel(&self) -> &Kernel {
+        &self.kernel
+    }
+}
+
+pub struct EdgeDetect {
+    kernel: Kernel,
+}
+
+impl EdgeDetect {
+    pub fn new() -> Self {
+        // 3x3 edge detection kernel:
+        // -1 -1 -1
+        // -1  8 -1
+        // -1 -1 -1
+        let kernel = Kernel::new(3, vec![-1.0, -1.0, -1.0, -1.0, 8.0, -1.0, -1.0, -1.0, -1.0]);
+        Self { kernel }
+    }
+}
+
+impl KernelTransformation for EdgeDetect {
+    fn kernel(&self) -> &Kernel {
+        &self.kernel
+    }
+}
+
+pub struct Emboss {
+    kernel: Kernel,
+}
+
+impl Emboss {
+    pub fn new() -> Self {
+        // 3x3 emboss kernel:
+        // -2 -1  0
+        // -1  1  1
+        //  0  1  2
+        let kernel = Kernel::new(3, vec![-2.0, -1.0, 0.0, -1.0, 1.0, 1.0, 0.0, 1.0, 2.0]);
+        Self { kernel }
+    }
+}
+
+impl KernelTransformation for Emboss {
+    fn kernel(&self) -> &Kernel {
+        &self.kernel
     }
 }
