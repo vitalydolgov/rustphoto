@@ -1,3 +1,17 @@
+// Image representation module.
+//
+// # Data Structures
+//
+// - `Pixel`: RGB color representation with 8-bit channels (0-255).
+//
+// - `Image`: Contains width, height (i32), and a flat pixel array.
+//   Pixels are stored in row-major order: `pixels[y * width + x]`.
+//
+// # Type Conversions
+//
+// - Loading: `u32` (image crate) → `i32` (internal)
+// - Saving: `i32` (internal) → `u32` (image crate)
+
 #[derive(Debug, Clone, Copy)]
 pub struct Pixel {
     pub(crate) r: u8,
@@ -28,8 +42,8 @@ impl Pixel {
 }
 
 pub struct Image {
-    pub(crate) width: usize,
-    pub(crate) height: usize,
+    pub(crate) width: i32,
+    pub(crate) height: i32,
     pub(crate) pixels: Vec<Pixel>,
 }
 
@@ -42,8 +56,8 @@ impl Image {
         let pixels: Vec<Pixel> = rgb.pixels().map(|p| Pixel::new(p[0], p[1], p[2])).collect();
 
         Ok(Self {
-            width: width as usize,
-            height: height as usize,
+            width: width as i32,
+            height: height as i32,
             pixels,
         })
     }
@@ -52,8 +66,8 @@ impl Image {
         let mut buffer = image::RgbImage::new(self.width as u32, self.height as u32);
 
         for (i, pixel) in self.pixels.iter().enumerate() {
-            let x = (i % self.width) as u32;
-            let y = (i / self.width) as u32;
+            let x = (i as i32 % self.width) as u32;
+            let y = (i as i32 / self.width) as u32;
             buffer.put_pixel(x, y, image::Rgb([pixel.r, pixel.g, pixel.b]));
         }
 

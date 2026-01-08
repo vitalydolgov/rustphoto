@@ -1,42 +1,10 @@
 mod rustphoto;
 
-use std::io::{self, Write};
+use std::io::{stdin, stdout, Write};
 use std::ops::ControlFlow;
 
 use rustphoto::image::{Image, Pixel};
 use rustphoto::transforms::*;
-
-fn expand_path(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix("~/") {
-        if let Some(home) = dirs::home_dir() {
-            return home.join(rest).to_string_lossy().to_string();
-        }
-    }
-
-    path.to_string()
-}
-
-fn parse_number(s: &str) -> Option<usize> {
-    s.parse().ok().or_else(|| {
-        println!("Invalid number");
-        None
-    })
-}
-
-fn parse_float(s: &str) -> Option<f32> {
-    s.parse().ok().or_else(|| {
-        println!("Invalid number");
-        None
-    })
-}
-
-fn parse_hex_color(s: &str) -> Option<u32> {
-    if s.starts_with("#") {
-        u32::from_str_radix(&s[1..], 16).ok()
-    } else {
-        u32::from_str_radix(s, 16).ok()
-    }
-}
 
 fn cmd_load(parts: &[&str]) -> Option<Image> {
     if parts.len() < 2 {
@@ -267,6 +235,30 @@ fn cmd_colorize(parts: &[&str], image: &Image) -> Option<Image> {
     }
 }
 
+fn cmd_boxblur(image: &Image) -> Option<Image> {
+    let transform = BoxBlur::new();
+
+    match transform.apply(image) {
+        Ok(result) => Some(result),
+        Err(e) => {
+            println!("Error: {}", e);
+            None
+        }
+    }
+}
+
+fn cmd_blur(image: &Image) -> Option<Image> {
+    let transform = GaussianBlur::new();
+
+    match transform.apply(image) {
+        Ok(result) => Some(result),
+        Err(e) => {
+            println!("Error: {}", e);
+            None
+        }
+    }
+}
+
 fn parse_command(
     command: &str,
     current_image: &mut Option<Image>,
@@ -293,7 +285,8 @@ fn parse_command(
         "help" => {
             println!(concat!(
                 "Available commands: load, save, crop, flip, rotate, fit, ",
-                "invert, grayscale, brightness, contrast, tint, colorize, undo, help, exit"
+                "invert, grayscale, brightness, contrast, tint, colorize, ",
+                "blur, boxblur, undo, help, exit"
             ));
             return ControlFlow::Continue(());
         }
@@ -374,6 +367,18 @@ fn parse_command(
                 *current_image = Some(result);
             }
         }
+        "blur" => {
+            if let Some(result) = cmd_blur(image) {
+                *previous_image = current_image.take();
+                *current_image = Some(result);
+            }
+        }
+        "boxblur" => {
+            if let Some(result) = cmd_boxblur(image) {
+                *previous_image = current_image.take();
+                *current_image = Some(result);
+            }
+        }
         _ => println!("Unknown command: {}", command),
     }
 
@@ -390,14 +395,14 @@ fn main() {
     loop {
         print!("> ");
 
-        if let Err(e) = io::stdout().flush() {
+        if let Err(e) = stdout().flush() {
             eprintln!("Error: {}", e);
             break;
         }
 
         let mut input = String::new();
 
-        match io::stdin().read_line(&mut input) {
+        match stdin().read_line(&mut input) {
             Ok(0) => break, // EOF
             Ok(_) => {
                 if let ControlFlow::Break(()) =
@@ -411,5 +416,39 @@ fn main() {
                 break;
             }
         }
+    }
+}
+
+// Utils
+
+fn expand_path(path: &str) -> String {
+    if let Some(rest) = path.strip_prefix("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return home.join(rest).to_string_lossy().to_string();
+        }
+    }
+
+    path.to_string()
+}
+
+fn parse_number(s: &str) -> Option<i32> {
+    s.parse().ok().or_else(|| {
+        println!("Invalid number");
+        None
+    })
+}
+
+fn parse_float(s: &str) -> Option<f32> {
+    s.parse().ok().or_else(|| {
+        println!("Invalid number");
+        None
+    })
+}
+
+fn parse_hex_color(s: &str) -> Option<u32> {
+    if s.starts_with("#") {
+        u32::from_str_radix(&s[1..], 16).ok()
+    } else {
+        u32::from_str_radix(s, 16).ok()
     }
 }
