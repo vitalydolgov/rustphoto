@@ -3,6 +3,7 @@ mod rustphoto;
 use std::io::{Write, stdin, stdout};
 use std::ops::ControlFlow;
 
+use rustphoto::compression;
 use rustphoto::image::{Image, Pixel};
 use rustphoto::transforms::*;
 
@@ -36,6 +37,47 @@ fn cmd_save(parts: &[&str], image: &Image) {
 
     match image.save(&path) {
         Ok(_) => println!("Image saved: {}", path),
+        Err(e) => println!("Error: {}", e),
+    }
+}
+
+fn cmd_compress(parts: &[&str], image: &Image) {
+    if parts.len() < 3 {
+        println!("Usage: compress <path> <max_size_kb>");
+        return;
+    }
+
+    let path = expand_path(parts[1]);
+
+    let path_lower = path.to_lowercase();
+    if !path_lower.ends_with(".jpg") && !path_lower.ends_with(".jpeg") {
+        println!("Please use .jpg or .jpeg extension");
+        return;
+    }
+
+    let max_size_kb = match parse_number(parts[2]) {
+        Some(n) if n > 0 => n as usize,
+        _ => {
+            println!("Error: max_size_kb must be a positive number");
+            return;
+        }
+    };
+
+    let max_size_bytes = max_size_kb * 1024;
+
+    match compression::save_jpeg_compressed(image, &path, max_size_bytes) {
+        Ok(_) => {
+            if let Ok(metadata) = std::fs::metadata(&path) {
+                let final_kb = metadata.len() / 1024;
+                let final_bytes = metadata.len();
+                println!(
+                    "Compressed to {} KB ({} bytes): {}",
+                    final_kb, final_bytes, path
+                );
+            } else {
+                println!("Image compressed: {}", path);
+            }
+        }
         Err(e) => println!("Error: {}", e),
     }
 }
@@ -308,8 +350,8 @@ fn parse_command(
         }
         "help" => {
             println!(concat!(
-                "Available commands: load, save, crop, flip, rotate, fit, ",
-                "invert, grayscale, brightness, contrast, tint, colorize, ",
+                "Available commands: load, save, compress, crop, flip, rotate, ",
+                "fit, invert, grayscale, brightness, contrast, tint, colorize, ",
                 "blur, sharpen, edge, emboss, undo, help, exit"
             ));
             return ControlFlow::Continue(());
@@ -324,6 +366,7 @@ fn parse_command(
 
     match parts[0] {
         "save" => cmd_save(&parts, image),
+        "compress" => cmd_compress(&parts, image),
         "undo" => {
             if let Some(prev) = previous_image.take() {
                 *current_image = Some(prev);
@@ -468,10 +511,17 @@ fn expand_path(path: &str) -> String {
 }
 
 fn parse_number(s: &str) -> Option<i32> {
-    s.parse().ok().or_else(|| {
-        println!("Invalid number");
-        None
-    })
+    match s.parse::<i32>() {
+        Ok(n) if n >= 0 => Some(n),
+        Ok(_) => {
+            println!("Number must be non-negative");
+            None
+        }
+        Err(_) => {
+            println!("Invalid number");
+            None
+        }
+    }
 }
 
 fn parse_float(s: &str) -> Option<f32> {

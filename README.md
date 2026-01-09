@@ -24,6 +24,9 @@ A command-line image processing tool written in Rust.
 - **edge** - Edge detection
 - **emboss** - Emboss effect
 
+### Compression
+- **compress** - Save as JPEG with target file size (quality 1-100, binary search)
+
 ## Building
 
 ```bash
@@ -43,6 +46,7 @@ cargo run
 ```
 load <path>                           Load an image
 save <path>                           Save current image
+compress <path> <max_size_kb>         Save as JPEG with target size
 crop <x> <y> <width> <height>         Crop region
 flip <h|v>                            Flip horizontal or vertical
 rotate <90|180|270>                   Rotate image
@@ -72,6 +76,8 @@ Image loaded: 1920x1080
 > sharpen
 > save ~/edited.jpg
 Image saved: /Users/you/edited.jpg
+> compress ~/small.jpg 50
+Compressed to 49 KB (49823 bytes): /Users/you/small.jpg
 ```
 
 ## Architecture

@@ -1,3 +1,4 @@
+use super::error::ProcessError;
 use super::image::{Image, Pixel};
 
 // Image transformations module.
@@ -21,23 +22,8 @@ use super::image::{Image, Pixel};
 // let pixel = pixels[idx];
 // ```
 
-#[derive(Debug)]
-pub enum TransformError {
-    OutOfBounds,
-}
-
-impl std::fmt::Display for TransformError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TransformError::OutOfBounds => write!(f, "Region is out of bounds"),
-        }
-    }
-}
-
-impl std::error::Error for TransformError {}
-
 pub trait Transformation {
-    fn apply(&self, image: &Image) -> Result<Image, TransformError>;
+    fn apply(&self, image: &Image) -> Result<Image, ProcessError>;
 }
 
 // Geometric transformations
@@ -61,9 +47,15 @@ impl Crop {
 }
 
 impl Transformation for Crop {
-    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+    fn apply(&self, image: &Image) -> Result<Image, ProcessError> {
         if self.x + self.width > image.width || self.y + self.height > image.height {
-            return Err(TransformError::OutOfBounds);
+            return Err(ProcessError::OutOfBounds {
+                operation: "crop".to_string(),
+                details: format!(
+                    "requested region ({}, {}, {}, {}) exceeds image bounds ({}x{})",
+                    self.x, self.y, self.width, self.height, image.width, image.height
+                ),
+            });
         }
 
         let mut pixels = Vec::with_capacity((self.width * self.height) as usize);
@@ -100,7 +92,7 @@ impl Flip {
 }
 
 impl Transformation for Flip {
-    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+    fn apply(&self, image: &Image) -> Result<Image, ProcessError> {
         let mut pixels = vec![Pixel::new(0, 0, 0); (image.width * image.height) as usize];
 
         match self.axis {
@@ -152,7 +144,7 @@ impl Rotate {
 }
 
 impl Transformation for Rotate {
-    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+    fn apply(&self, image: &Image) -> Result<Image, ProcessError> {
         let (width, height) = match self.angle {
             RotateAngle::Deg90 | RotateAngle::Deg270 => (image.height, image.width),
             RotateAngle::Deg180 => (image.width, image.height),
@@ -219,7 +211,7 @@ impl Fit {
 }
 
 impl Transformation for Fit {
-    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+    fn apply(&self, image: &Image) -> Result<Image, ProcessError> {
         let scale_x = self.max_width as f32 / image.width as f32;
         let scale_y = self.max_height as f32 / image.height as f32;
         let scale = scale_x.min(scale_y).min(1.0);
@@ -263,7 +255,7 @@ impl Invert {
 }
 
 impl Transformation for Invert {
-    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+    fn apply(&self, image: &Image) -> Result<Image, ProcessError> {
         let pixels: Vec<Pixel> = image
             .pixels
             .iter()
@@ -287,7 +279,7 @@ impl Grayscale {
 }
 
 impl Transformation for Grayscale {
-    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+    fn apply(&self, image: &Image) -> Result<Image, ProcessError> {
         let pixels: Vec<Pixel> = image
             .pixels
             .iter()
@@ -316,7 +308,7 @@ impl Brightness {
 }
 
 impl Transformation for Brightness {
-    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+    fn apply(&self, image: &Image) -> Result<Image, ProcessError> {
         let pixels: Vec<Pixel> = image
             .pixels
             .iter()
@@ -348,7 +340,7 @@ impl Contrast {
 }
 
 impl Transformation for Contrast {
-    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+    fn apply(&self, image: &Image) -> Result<Image, ProcessError> {
         let pixels: Vec<Pixel> = image
             .pixels
             .iter()
@@ -381,7 +373,7 @@ impl Tint {
 }
 
 impl Transformation for Tint {
-    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+    fn apply(&self, image: &Image) -> Result<Image, ProcessError> {
         let blend =
             |src: u8, tint: u8| src as f32 * (1.0 - self.intensity) + tint as f32 * self.intensity;
 
@@ -416,7 +408,7 @@ impl Colorize {
 }
 
 impl Transformation for Colorize {
-    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+    fn apply(&self, image: &Image) -> Result<Image, ProcessError> {
         let pixels: Vec<Pixel> = image
             .pixels
             .iter()
@@ -446,7 +438,7 @@ trait KernelTransformation {
 }
 
 impl<T: KernelTransformation> Transformation for T {
-    fn apply(&self, image: &Image) -> Result<Image, TransformError> {
+    fn apply(&self, image: &Image) -> Result<Image, ProcessError> {
         let kernel = self.kernel();
         let mut pixels = vec![Pixel::new(0, 0, 0); (image.width * image.height) as usize];
 

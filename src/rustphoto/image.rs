@@ -12,6 +12,8 @@
 // - Loading: `u32` (image crate) → `i32` (internal)
 // - Saving: `i32` (internal) → `u32` (image crate)
 
+use super::error::ProcessError;
+
 #[derive(Debug, Clone, Copy)]
 pub struct Pixel {
     pub(crate) r: u8,
@@ -48,8 +50,11 @@ pub struct Image {
 }
 
 impl Image {
-    pub fn load(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let img = image::open(path)?;
+    pub fn load(path: &str) -> Result<Self, ProcessError> {
+        let img = image::open(path).map_err(|e| ProcessError::ImageLoad {
+            path: path.to_string(),
+            source: Box::new(e),
+        })?;
         let rgb = img.to_rgb8();
         let (width, height) = rgb.dimensions();
 
@@ -62,7 +67,7 @@ impl Image {
         })
     }
 
-    pub fn save(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn save(&self, path: &str) -> Result<(), ProcessError> {
         let mut buffer = image::RgbImage::new(self.width as u32, self.height as u32);
 
         for (i, pixel) in self.pixels.iter().enumerate() {
@@ -71,7 +76,11 @@ impl Image {
             buffer.put_pixel(x, y, image::Rgb([pixel.r, pixel.g, pixel.b]));
         }
 
-        buffer.save(path)?;
+        buffer.save(path).map_err(|e| ProcessError::FileWrite {
+            path: path.to_string(),
+            source: Box::new(e),
+        })?;
+
         Ok(())
     }
 }
